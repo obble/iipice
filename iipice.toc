@@ -1,0 +1,6 @@
+## Interface: 70000
+## Title: iip ice mage
+## Author: modernist
+## Notes: [incomplete] tool for icicle tracking on frost mage
+
+ice.lua
