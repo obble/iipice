@@ -28,7 +28,7 @@
     		local bu = CreateFrame('Frame', 'iipIcicle'..i, ice)
     		bu:SetFrameStrata'BACKGROUND'
     		bu:SetSize(size, size)
-            bu:SetPoint('TOPLEFT', size, i*-(size))
+                bu:SetPoint('TOPLEFT', size, i*-(size))
 
     		bu.icon = bu:CreateTexture(nil, 'BACKGROUND')
     		bu.icon:SetTexture(icon)
