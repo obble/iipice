@@ -28,44 +28,11 @@
         print('|cff69CCF0Icicle Tracker:|r', ...)
     end
 
-<<<<<<< HEAD
     local Parent = function()
         local f = C_NamePlate.GetNamePlateForUnit'player'
         if f then
             icicles[1]:SetPoint('BOTTOMLEFT', NamePlatePlayerResourceFrame, 'TOPLEFT', 0, 18)
         end
-=======
-    local Create = function()
-    	--  local name, rank, icon, castTime, minRange, maxRange = GetSpellInfo(76613)
-    	for i = 1, 6 do
-    		local bu = CreateFrame('Frame', 'iipIcicle'..i, ice)
-    		bu:SetFrameStrata'BACKGROUND'
-    		bu:SetSize(size, size)
-                bu:SetPoint('TOPLEFT', size, i*-(size))
-
-    		bu.icon = bu:CreateTexture(nil, 'BACKGROUND')
-    		bu.icon:SetTexture(icon)
-    		bu.icon:SetAllPoints()
-
-    		bu.t = bu:CreateFontString("txtIciclesDamage"..i, "GameFontNormal")
-    		bu.t:SetFont(STANDARD_TEXT_FONT, 15)
-    		bu.t:SetPoint('CENTER', bu, 'BOTTOM')
-    		bu.t:SetText'0'
-
-    		bu.cd = CreateFrame('Cooldown', nil, bu)
-    		bu.cd:SetAllPoints()
-
-    		icicles[i] = {}
-    		icicles[i].basedamage = 0
-    		icicles[i].timestamp  = 0
-    		icicles[i].bu         = bu
-    	end
-
-    	icicles[6].bu:SetSize(size*2, size*2)
-    	icicles[6].bu:SetPoint('TOPLEFT',0,6*-(size))
-    	icicles[6].bu.t:SetPoint('TOPLEFT', (size*2)+(size/4), 0)
-    	icicles[6].bu.t:SetFont(STANDARD_TEXT_FONT, 30)
->>>>>>> origin/master
     end
 
 
@@ -234,9 +201,14 @@
     		self.lastEvent = now
     	]]
 
-        if id == 30455 then print(id, etype) end
+        --  if id == 30455 then print(id, etype) end
 
-        if etype and ((id == 228597 and etype == 'SPELL_DAMAGE') or ((id == 30455 or id == 1000091) and etype == 'SPELL_CAST_SUCCESS')) then
+        if etype
+        and (
+            (id == 228597 and etype == 'SPELL_DAMAGE')
+            or
+            ((id == 30455 or id == 1000091) and etype == 'SPELL_CAST_SUCCESS')
+            ) then
         	-- increment
         	if  id == 228597 then
         		if icicles[5].icicle then  -- max amount reached
