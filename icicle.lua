@@ -7,7 +7,8 @@
     local aName, ns = ...
 
     -- *.*°.*°...*°.°*..*. CONFIG *..*..**.*
-    local x, y = 40, 40    --   icon size
+    local x, y             = 40, 40    --   icon size
+    local xoffset, yoffset = 3,  0     --   spacing between button
     -- ......***.*.*..°.*.*.***.*°.*.*°*.*
 
     local icicles  = {}
@@ -19,12 +20,12 @@
 
     -- lets also use our handler as a container
     local addon = CreateFrame('Frame', nil, UIParent)
-    addon:SetSize(x*5, y)
+    addon:SetSize((x*5)+(xoffset*5), y+(yoffset*5))
 
     local spellcache = {
         [228597]  = true, --  [frostbolt]   :: this might need redefining for levels < 110
         [30455]   = true, --  [ice lance]
-        [1000091] = true, --  [glacial spike]
+        [199786] = true, --  [glacial spike]
     }
 
     local Print = function(...)
@@ -33,8 +34,11 @@
 
     local Parent = function()
         local f = C_NamePlate.GetNamePlateForUnit'player'
-        if f then
+        addon:ClearAllPoints()
+        if f and _G[aName..'DB'].nameplate then
             addon:SetPoint('BOTTOMLEFT', NamePlatePlayerResourceFrame, 'TOPLEFT', -(x*5)/4, 18)
+        else
+            addon:SetPoint('CENTER', UIParent, 0, 120)
         end
     end
 
@@ -65,7 +69,7 @@
     		lock      = false,
     		scale     = 1.1,
     		textscale = 16,
-    		combat    = true,
+    		combat    = false,
     	}})
     end
 
@@ -109,7 +113,7 @@
             f:SetBackdrop(BACKDROP)
     		f:SetBackdropColor(0, 0, 0, 1)
     		f:SetFrameStrata'LOW'
-    		f.damage = 0
+    		f.base   = 0
     		f.icicle = false
 
             f.icon = f:CreateTexture(nil, 'ARTWORK')
@@ -124,7 +128,7 @@
             f.t:Hide()
 
     		if i > 1 then
-    			f:SetPoint('LEFT', icicles[i - 1], 'RIGHT')
+    			f:SetPoint('LEFT', icicles[i - 1], 'RIGHT', xoffset, yoffset)
                 if i == 5 then
     				f.overlay = CreateFrame('Frame', '$parentActivate', f, 'ActionBarButtonSpellActivationAlert')
     				f.overlay:SetSize((x + 1)*1.4, (y + 1)*1.4)       -- to-do: fix these weird ass calculations
@@ -141,6 +145,18 @@
 
     		icicles[i] = f
     	end
+
+        local total = CreateFrame('Frame', aName..'icetotal', self)
+        total:SetSize(x + 30, y)
+        total:SetPoint('LEFT', icicles[5], 'RIGHT')
+
+        total.t = total:CreateFontString(nil, 'OVERLAY', 'GameFontHighlightLarge')
+        total.t:SetAllPoints()
+        total.t:SetShadowOffset(0, 0)
+
+        local tooltip = CreateFrame('GameTooltip', 'iipGSTooltip', UIParent, 'GameTooltipTemplate')
+        tooltip:SetOwner(UIParent, 'ANCHOR_NONE')
+
     	self:UpdateFrames()
     end
 
@@ -159,11 +175,49 @@
     	end)
     end
 
+    function addon:DamageTotal(reset)
+        local num   = 0
+        local total = _G[aName..'icetotal']
+        local n
+
+        for i = 1, 5 do
+            if icicles[i].damage then
+                num = num + icicles[i].damage
+            end
+        end
+
+        if  iipGSTooltip then
+            iipGSTooltip:SetSpellByID(199786)
+            local text = iipGSTooltipTextLeft4:GetText()
+            if text then
+                n = text:match'dealing (.-) damage plus the damage stored in your Icicles'
+                if  n then
+                    n = n:gsub(' [A-z ]*', '')
+                    n = n:gsub(',', '')
+                    n = tonumber(n)
+                    if icicles[5].damage and icicles[5].damage > 0 then num = num + n end
+                end
+            end
+        end
+
+        total.t:SetText(num)
+
+        if  reset then
+            for i = 1, 5 do
+                if icicles[i].damage then icicles[i].damage = 0 end
+            end
+            num = 0
+            total.t:SetText''
+        end
+    end
+
     -- insert damage amounts for each icicle based on our equation.
     function addon:Damage(i)
-        local amount = siValue(icicles[i].damage/100*self.player_mastery)
-        icicles[i].t:SetText(amount)
+        local amount = icicles[i].base > 0 and math.floor(icicles[i].base/100*self.player_mastery) or 0
+        icicles[i].damage  = amount
+        icicles[i].t:SetText(amount > 0 and amount or '')
         icicles[i].t:Show()
+        self:DamageTotal()
     end
 
     -- Update icicle count & dmg for frames
@@ -177,8 +231,11 @@
     		if  icicles[i].icicle then -- If icicle exist
     			-- enable icicle frame
     			icicles[i].icon:SetAlpha(1)
-                if  icicles[i].damage == 0 then -- is empty or reset
-                    icicles[i].damage = damage
+                if  icicles[i].base == 0 then -- is empty or reset
+                    icicles[i].base = damage
+                end
+                if  damage == 0 then
+                    icicles[i].base = 0
                 end
     			if startTimer then
     				--if not icicles[i].timer then
@@ -190,7 +247,7 @@
     			-- deactivate
     			icicles[i].icon:SetAlpha(0)
                 icicles[i].t:Hide()
-                icicles[i].damage = 0
+                icicles[i].base = 0
     		end
 
     		if i == 5 then
@@ -230,13 +287,11 @@
         if self.lastEvent and ((now - self.lastEvent) <= .9) then return end
         self.lastEvent = now]]
 
-        --  if id == 30455 then print(id, etype) end
-
         if etype
         and (
             (id == 228597 and etype == 'SPELL_DAMAGE')
             or
-            ((id == 30455 or id == 1000091) and etype == 'SPELL_CAST_SUCCESS')
+            ((id == 30455 or id == 199786) and etype == 'SPELL_CAST_SUCCESS')
             ) then
         	-- increment
         	if  id == 228597 then
@@ -259,15 +314,16 @@
         		return
 
             -- decrement (icicle)
-            elseif  id == 30455 or id == 1000091 then
+        elseif  id == 30455 or id == 199786 then
         		if not icicles[1].icicle then return end -- do not decrement if no icicle exists
         		for i = 5, 1, -1 do -- reverse count
         			if  icicles[i].timer then
         				icicles[i].timer:Cancel()
         			end
         			icicles[i].icicle = false
+                    self:DamageTotal(true)
         		end
-        		self:UpdateFrames(true)
+        		self:UpdateFrames(true, 0)
             end
     	end
     end
