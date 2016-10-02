@@ -7,16 +7,19 @@
     local aName, ns = ...
 
     -- *.*°.*°...*°.°*..*. CONFIG *..*..**.*
-    local x, y = 19.2, 12    --   icon size
+    local x, y = 40, 40    --   icon size
     -- ......***.*.*..°.*.*.***.*°.*.*°*.*
 
-    local addon    = CreateFrame'Frame'
     local icicles  = {}
     local BACKDROP = {
         bgFile = [[Interface\ChatFrame\ChatFrameBackground]],
         tiled  = false,
         insets = {left = -3, right = -3, top = -3, bottom = -3}
     }
+
+    -- lets also use our handler as a container
+    local addon = CreateFrame('Frame', nil, UIParent)
+    addon:SetSize(x*5, y)
 
     local spellcache = {
         [228597]  = true, --  [frostbolt]   :: this might need redefining for levels < 110
@@ -31,10 +34,27 @@
     local Parent = function()
         local f = C_NamePlate.GetNamePlateForUnit'player'
         if f then
-            icicles[1]:SetPoint('BOTTOMLEFT', NamePlatePlayerResourceFrame, 'TOPLEFT', 0, 18)
+            addon:SetPoint('BOTTOMLEFT', NamePlatePlayerResourceFrame, 'TOPLEFT', -(x*5)/4, 18)
         end
     end
 
+    local siValue = function(v)
+        if not v then return '' end
+        local absvalue = abs(v)
+        local str, val
+        if  absvalue >= 1e7 then
+            str, val = '%.1fm', v/1e6
+        elseif absvalue >= 1e6 then
+            str, val = '%.2fm', v/1e6
+        elseif absvalue >= 1e5 then
+            str, val = '%.0fk', v/1e3
+        elseif absvalue >= 1e3 then
+            str, val = '%.1fk', v/1e3
+        else
+            str, val = '%d', v
+        end
+        return format(str, val)
+    end
 
     function addon:Vars()
         _G[aName..'DB'] = setmetatable(_G[aName..'DB'] or {}, {__index = {
@@ -84,12 +104,12 @@
 
     function addon:Create(db)
     	for i = 1, 5 do
-    		local f = CreateFrame('Frame', aName..'icicle'..i, UIParent)
+    		local f = CreateFrame('Frame', aName..'icicle'..i, self)
     		f:SetSize(x, y)
             f:SetBackdrop(BACKDROP)
     		f:SetBackdropColor(0, 0, 0, 1)
     		f:SetFrameStrata'LOW'
-    		-- TODO: f.damage = 0
+    		f.damage = 0
     		f.icicle = false
 
             f.icon = f:CreateTexture(nil, 'ARTWORK')
@@ -98,8 +118,9 @@
             f.icon:SetAlpha(0)
 
             f.t = f:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
-            f.t:SetPoint('BOTTOM', f, 'CENTER')
-            f.t:SetFont(STANDARD_TEXT_FONT, db.textscale, 'OUTLINE')
+            f.t:SetPoint'CENTER'
+            f.t:SetFont(STANDARD_TEXT_FONT, 11, 'OUTLINE')
+            f.t:SetShadowOffset(0, 0)
             f.t:Hide()
 
     		if i > 1 then
@@ -114,6 +135,8 @@
     					self:GetParent():Hide()
     				end)
     			end
+            else
+                f:SetPoint'LEFT'
     		end
 
     		icicles[i] = f
@@ -121,45 +144,57 @@
     	self:UpdateFrames()
     end
 
-    -- Create expiration timer frame(s). (Every icicle have their own expiration time, so can't use only 1 timer)
+    -- create expiration timer frame(s). (Every icicle have their own expiration time, so can't use only 1 timer)
     function addon:Timer(i)
     	if  icicles[i].timer then
-    		-- Cancel active timer before refreshing expiration
+    		-- cancel active timer before refreshing expiration
     		icicles[i].timer:Cancel()
     	end
     	-- Start timer
     	icicles[i].timer = C_Timer.NewTimer(29, function(self) -- 29: Icicle expiration time
     		icicles[i].icicle = false
-    		-- TODO: Decrease total dmg stored with the dmg stored in deactivated icicle frame
+    		-- TODO: decrease total dmg stored with the dmg stored in deactivated icicle frame
     		addon:UpdateFrames()
     		self = nil -- icFrame.timer = nil
     	end)
     end
 
+    -- insert damage amounts for each icicle based on our equation.
+    function addon:Damage(i)
+        local amount = siValue(icicles[i].damage/100*self.player_mastery)
+        icicles[i].t:SetText(amount)
+        icicles[i].t:Show()
+    end
+
     -- Update icicle count & dmg for frames
-    function addon:UpdateFrames(startTimer)
+    function addon:UpdateFrames(startTimer, damage)
     	local i = 1
 
     	-- I've reverted this whole function back to an old version by memory.
     	-- Stuff probably missing and needs changing.
 
     	while i <= 5 do
-    		if icicles[i].icicle then -- If icicle exist
-    			-- Enable icicle frame
+    		if  icicles[i].icicle then -- If icicle exist
+    			-- enable icicle frame
     			icicles[i].icon:SetAlpha(1)
+                if  icicles[i].damage == 0 then -- is empty or reset
+                    icicles[i].damage = damage
+                end
     			if startTimer then
     				--if not icicles[i].timer then
     					self:Timer(i)
+                        self:Damage(i)
     				--end
     			end
     		else
-    			-- Deactivate
+    			-- deactivate
     			icicles[i].icon:SetAlpha(0)
+                icicles[i].t:Hide()
+                icicles[i].damage = 0
     		end
 
     		if i == 5 then
     			-- TODO: Add update for stored damage count
-    			-- See: AbbreviateLargeNumbers()
     			-- Play animation when full on icicles
     			if  icicles[i].icicle then
     				icicles[i].overlay:GetParent():Show()
@@ -187,19 +222,13 @@
     	end
     end
 
-    function addon:COMBAT_LOG_EVENT_UNFILTERED(_, _, etype, _, srcGUID, _, _, _, _, _, _, _, id, _, _, dmgAmount)
-        if (not srcGUID )or srcGUID ~= self.player_GUID then return end   -- Spell not cast by player
-        if (not spellcache[id]) then return end                               -- Wrong spell ID
+    function addon:COMBAT_LOG_EVENT_UNFILTERED(_, _, etype, _, srcGUID, _, _, _, _, _, _, _, id, _, _, damage)
+        if not srcGUID or srcGUID ~= self.player_GUID then return end   -- Spell not cast by player
+        if not spellcache[id] then return end                               -- Wrong spell ID
 
-    	--[[       -- TODO: check if this is still the case in legion
-
-    	There's a bug with the counter when casting ice lance too fast after using frost bolt,
-    	You can use this somehow to prevent it: (Can't remember where in CLEU to put it though)
-
-    		local now = GetTime()
-    		if (self.lastEvent and now - self.lastEvent) <= 0.9 then return end
-    		self.lastEvent = now
-    	]]
+        --[[local now = GetTime()
+        if self.lastEvent and ((now - self.lastEvent) <= .9) then return end
+        self.lastEvent = now]]
 
         --  if id == 30455 then print(id, etype) end
 
@@ -212,8 +241,8 @@
         	-- increment
         	if  id == 228597 then
         		if icicles[5].icicle then  -- max amount reached
-        			-- TODO: Remove dmg from oldest icicle
-        			self:UpdateFrames(true)
+        			-- TODO: remove dmg from oldest icicle
+        			self:UpdateFrames(true, damage)
         			return   -- stop func
         		end
 
@@ -225,10 +254,10 @@
         		end
 
         		-- TODO: increment icicle damage count and text
-        		-- dmgAmount/self.player_mastery*100 ?
-
-        		self:UpdateFrames(true)
+        		-- damage/self.player_mastery*100 ?
+        		self:UpdateFrames(true, damage)
         		return
+
             -- decrement (icicle)
             elseif  id == 30455 or id == 1000091 then
         		if not icicles[1].icicle then return end -- do not decrement if no icicle exists
@@ -318,6 +347,7 @@
     	self:RegisterEvent'MASTERY_UPDATE'
         self:RegisterEvent'PLAYER_REGEN_DISABLED'
     	self:RegisterEvent'PLAYER_REGEN_ENABLED'
+
     	if _G[aName..'DB'].combat then
     		self:RefreshFrames(true)  -- Hide frames
     	else
@@ -328,11 +358,14 @@
     		self:ACTIVE_TALENT_GROUP_CHANGED() -- Disable addon if player is not frost specced
     	end
 
-    	if (select(2, IsInInstance()) == 'arena') then
+    	if  select(2, IsInInstance()) == 'arena' then
     		-- This event is sometimes not called when disconnecting in an arena,
     		-- make sure the function is always run.
     		self:PLAYER_ENTERING_WORLD()
     	end
+
+        -- init mastery value
+        self:MASTERY_UPDATE()
 
     	-- Remove objects from memory
     	self.PLAYER_LOGIN = nil
